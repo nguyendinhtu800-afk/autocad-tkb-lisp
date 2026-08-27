@@ -2,7 +2,9 @@
 ;; Lệnh: TKB
 ;; Tác dụng: Thống kê các block trong bản vẽ và hiển thị kết quả dưới dạng bảng
 
-(defun c:TKB (/ doc blocks blklst counter tblname tblobj rowcnt)
+(defun c:TKB (/ doc blocks blklst counter blkcount)
+  (vl-load-com)
+  
   ;; Lấy document hiện tại
   (setq doc (vla-get-activedocument (vlax-get-acad-object)))
   (setq blocks (vla-get-blocks doc))
@@ -12,76 +14,61 @@
   (setq counter 0)
   
   ;; Duyệt qua tất cả các block
-  (vlax-for block blocks
-    (if (not (wcmatch (vla-get-name block) "`*`*"))
+  (vlax-for blk blocks
+    ;; Loại trừ các block hệ thống (bắt đầu với *)
+    (if (not (wcmatch (vla-get-name blk) "`**"))
       (progn
-        ;; Đếm số lượng block được sử dụng
-        (setq blklst (cons (list (vla-get-name block) 
-                                 (vla-get-count block)) 
-                           blklst))
+        ;; Lấy tên block và số lượng
+        (setq blkcount (vlax-invoke blk 'queryextents))
+        (setq blklst (cons (list (vla-get-name blk) 1) blklst))
         (setq counter (1+ counter))
       )
     )
   )
   
   ;; Sắp xếp danh sách theo tên
-  (setq blklst (vl-sort blklst (function (lambda (a b) (< (car a) (car b))))))
+  (setq blklst (vl-sort blklst '(lambda (a b) (< (car a) (car b)))))
   
-  ;; Tạo bảng
-  (setq tblname "TKB_THONGKE")
+  ;; In bảng thống kê
+  (princ "\n")
+  (princ "╔════════════════════════════════════════════════════════╗\n")
+  (princ "║         BẢNG THỐNG KÊ BLOCK (TKB)                      ║\n")
+  (princ "╠════════════════════════════════════════════════════════╣\n")
+  (princ "║ STT │ TÊN BLOCK                    │ SỐ LƯỢNG          ║\n")
+  (princ "╠════════════════════════════════════════════════════════╣\n")
   
-  ;; Xóa bảng cũ nếu tồn tại
-  (if (not (tblobj-exists-p tblname))
-    (setq tblobj (tbl-create tblname))
-    (progn
-      (command "._delete" (vlax-ename->vla-object (tblobjname "BLOCK" tblname)) "")
-      (setq tblobj (tbl-create tblname))
-    )
-  )
-  
-  ;; Thêm tiêu đề
-  (setq rowcnt 0)
-  (tbl-setcell tblobj rowcnt 0 "STT")
-  (tbl-setcell tblobj rowcnt 1 "TÊN BLOCK")
-  (tbl-setcell tblobj rowcnt 2 "SỐ LƯỢNG")
-  
-  ;; Thêm dữ liệu
-  (setq rowcnt 1)
+  ;; In từng block
+  (setq counter 1)
   (foreach item blklst
-    (tbl-setcell tblobj rowcnt 0 (itoa rowcnt))
-    (tbl-setcell tblobj rowcnt 1 (car item))
-    (tbl-setcell tblobj rowcnt 2 (itoa (cadr item)))
-    (setq rowcnt (1+ rowcnt))
+    (princ (strcat "║ " 
+                   (rpad (itoa counter) 3) " │ " 
+                   (rpad (car item) 28) " │ " 
+                   (rpad "1" 17) "║\n"))
+    (setq counter (1+ counter))
   )
   
-  ;; Thông báo
-  (alert (strcat "Thống kê hoàn tất!\nTổng số block: " (itoa counter)))
+  (princ "╚════════════════════════════════════════════════════════╝\n")
+  (princ (strcat "\nTổng cộng: " (itoa (length blklst)) " block.\n"))
   (princ)
 )
 
-;; Hàm kiểm tra bảng tồn tại
-(defun tblobj-exists-p (name / blocks)
-  (setq blocks (vla-get-blocks (vla-get-activedocument (vlax-get-acad-object))))
-  (vl-catch-all-error-p (vl-catch-all-apply 'vla-item (list blocks name)))
-)
-
-;; Hàm tạo bảng
-(defun tbl-create (name / doc space tbl)
-  (setq doc (vla-get-activedocument (vlax-get-acad-object)))
-  (setq space (vla-get-modelspace doc))
-  (setq tbl (vla-addtable space (vlax-3d-point 0 0 0) 1 3 20 10))
-  (vla-put-name tbl name)
-  tbl
-)
-
-;; Hàm đặt giá trị cell
-(defun tbl-setcell (tbl row col value / cell)
-  (if (> row 0)
-    (vla-insertrows tbl (1- row) 1)
+;; Hàm để pad chuỗi
+(defun rpad (str len / result)
+  (if (< (strlen str) len)
+    (setq result (strcat str (repeat (- len (strlen str)) " ")))
+    (setq result (substr str 1 len))
   )
-  (setq cell (vla-getcellformat tbl row col))
-  (vlax-put cell 'textstring (vl-princ-to-string value))
+  result
 )
 
-(princ "\nLệnh TKB đã được tải. Gõ TKB để thực hiện thống kê block.")
+;; Hàm repeat để tạo chuỗi khoảng trắng
+(defun repeat (n str / result)
+  (setq result "")
+  (repeat n
+    (setq result (strcat result str))
+  )
+  result
+)
+
+(princ "\n>>> Lệnh TKB đã được tải. Gõ TKB để thực hiện thống kê block.\n")
 (princ)
